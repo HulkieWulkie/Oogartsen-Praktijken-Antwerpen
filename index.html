@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Oogartsen Regio Antwerpen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Syne:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0b0f19;
+  --surface: #111827;
+  --surface2: #1a2236;
+  --border: rgba(255,255,255,0.07);
+  --text: #e2ddd6;
+  --muted: #6b7280;
+  --accent-warm: #f0833a;
+  --accent-cool: #38bdf8;
+  --accent-gold: #f0c060;
+  --red: #e05a52;
+  --purple: #a78bfa;
+}
+
+body {
+  font-family: 'Syne', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── HEADER ─── */
+header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  height: 56px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+  z-index: 1000;
+}
+
+.hbrand {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+}
+
+.hbrand h1 {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.hbrand .htag {
+  font-size: 0.63rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  padding-left: 14px;
+  border-left: 1px solid var(--border);
+}
+
+.hkpis {
+  display: flex;
+  gap: 22px;
+}
+
+.kpi {
+  text-align: right;
+}
+
+.kpi .kv {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--accent-gold);
+  line-height: 1;
+}
+
+.kpi .kl {
+  font-size: 0.58rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+/* ─── MAP ─── */
+#map-container {
+  flex: 1;
+  position: relative;
+}
+
+#map {
+  width: 100%;
+  height: 100%;
+}
+
+/* ─── LEGEND ─── */
+.panel {
+  position: absolute;
+  z-index: 500;
+  background: rgba(17, 24, 39, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  backdrop-filter: blur(16px);
+  padding: 16px 18px;
+}
+
+.panel-title {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 13px;
+  font-weight: 600;
+}
+
+.legend { bottom: 24px; left: 18px; min-width: 195px; }
+
+.leg-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 0.74rem;
+  color: var(--text);
+}
+
+.leg-circle {
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.88;
+}
+
+.leg-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 10px 0;
+}
+
+.leg-type {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.tring {
+  width: 11px; height: 11px;
+  border-radius: 50%;
+  border: 2px solid;
+  flex-shrink: 0;
+}
+
+/* ─── FILTER ─── */
+.filter-panel { top: 16px; right: 16px; min-width: 185px; }
+
+.fbtns { display: flex; flex-direction: column; gap: 5px; }
+
+.fbtn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--text);
+  font-family: 'Syne', sans-serif;
+  font-size: 0.73rem;
+  padding: 7px 11px;
+  cursor: pointer;
+  transition: all 0.14s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.fbtn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.15); }
+.fbtn.active { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.2); color: var(--text); font-weight: 600; }
+
+.fdot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: transparent;
+  border: 2px solid rgba(255,255,255,0.35);
+  transition: background 0.14s, border-color 0.14s;
+}
+.fbtn.active .fdot {
+  background: var(--accent-cool);
+  border-color: var(--accent-cool);
+}
+
+/* ─── POPUP ─── */
+.leaflet-popup-content-wrapper {
+  background: var(--surface2) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 24px 60px rgba(0,0,0,0.7) !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  min-width: 270px;
+  max-width: 360px;
+}
+
+.leaflet-popup-content { margin: 0 !important; }
+.leaflet-popup-tip-container { display: none !important; }
+
+.pu-head {
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.pu-head::before {
+  content: '';
+  position: absolute;
+  top: -20px; right: -20px;
+  width: 100px; height: 100px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(240,131,58,0.18) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.pu-type {
+  font-size: 0.58rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.pu-naam {
+  font-family: 'Playfair Display', serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+}
+
+.pu-gem {
+  font-size: 0.63rem;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.pu-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 9px;
+  background: var(--accent-warm);
+  color: white;
+  font-size: 0.67rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+}
+
+.pu-body { padding: 11px 16px 14px; }
+
+.pu-names {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px 10px;
+  font-size: 0.67rem;
+  color: #9ca3af;
+  line-height: 1.75;
+}
+
+.pu-names span::before {
+  content: '· ';
+  color: var(--accent-warm);
+  font-weight: 700;
+}
+
+/* ─── CENTER MARKER ─── */
+.cmarker {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: var(--accent-warm);
+  border: 3px solid white;
+  box-shadow: 0 0 0 4px rgba(240,131,58,0.35), 0 4px 20px rgba(240,131,58,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 15px;
+  animation: ringpulse 2.8s infinite;
+}
+
+@keyframes ringpulse {
+  0%,100% { box-shadow: 0 0 0 4px rgba(240,131,58,0.3), 0 4px 20px rgba(240,131,58,0.4); }
+  50%      { box-shadow: 0 0 0 12px rgba(240,131,58,0.08), 0 4px 24px rgba(240,131,58,0.6); }
+}
+
+/* leaflet overrides */
+.leaflet-control-zoom a {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+  font-family: 'Syne', sans-serif !important;
+}
+.leaflet-control-zoom a:hover { background: var(--surface2) !important; }
+.leaflet-control-attribution {
+  background: rgba(11,15,25,0.75) !important;
+  color: var(--muted) !important;
+  font-size: 0.58rem !important;
+}
+.leaflet-control-attribution a { color: #4b5563 !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hbrand">
+    <h1>Oogartsen — Regio Antwerpen</h1>
+    <span class="htag">±25 km rond AZ Monica Deurne · Maart 2026</span>
+  </div>
+
+</header>
+
+<div id="map-container">
+  <div id="map"></div>
+
+  <!-- Legend -->
+  <div class="panel legend">
+    <div class="panel-title">Legenda</div>
+    <div class="leg-row">
+      <div class="leg-circle" style="width:28px;height:28px;background:#38bdf8;display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;">●</div>
+      <span>Ziekenhuis / privépraktijk</span>
+    </div>
+    <div class="leg-row">
+      <div class="leg-circle" style="width:28px;height:28px;background:#f0833a;display:flex;align-items:center;justify-content:center;font-size:13px;color:white;font-weight:700;">★</div>
+      <span>AZ Monica Oogkliniek campus</span>
+    </div>
+    <div class="leg-divider"></div>
+    <div class="leg-type">
+      <div class="cmarker" style="width:22px;height:22px;font-size:11px;animation:none;">★</div>
+      <span>AZ Monica hoofdcampus</span>
+    </div>
+  </div>
+
+  <!-- Filter -->
+  <div class="panel filter-panel">
+    <div class="panel-title">Filter op type</div>
+    <div class="fbtns">
+      <button class="fbtn active" id="f-all"      onclick="setFilter('all')">
+        <div class="fdot"></div>Alle locaties
+      </button>
+      <button class="fbtn" id="f-zh"              onclick="setFilter('zh')">
+        <div class="fdot"></div>Ziekenhuizen
+      </button>
+      <button class="fbtn" id="f-pr"              onclick="setFilter('pr')">
+        <div class="fdot"></div>Privépraktijken
+      </button>
+      <button class="fbtn" id="f-big"             onclick="setFilter('big')">
+        <div class="fdot"></div>Grote centra (8+)
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// DATA  –  alle locaties in 25 km straal rond AZ Monica
+// ═══════════════════════════════════════════════════════════
+const LOCS = [
+
+  /* ══════════════════════════════════════════
+     OOGKLINIEK AZ MONICA — ALLE 9 CAMPUSSEN
+     Bron: oogkliniek.be/campussen (maart 2026)
+     ══════════════════════════════════════════ */
+
+  { naam:"AZ Monica — Oogkliniek (hoofdcampus)", gem:"2100 Deurne",
+    lat:51.2064, lng:4.4702, n:18, type:"zh", center:true,
+    artsen:["Babusiaux B.","Bevers C.","Bleyen I.","De la Porte V.","Depasse M.",
+            "Depla J.","D'heer B.","Geerts L.","Goossen C.",
+            "Haverals K.","Helsen S.","Jonckheere P.","Moschetta L.","Prinsen S.",
+            "Spiritus A.","Vercauteren L.","Weyns M.",
+            "+ 2 in opleiding (Hermann M., Janssen E.)"] },
+
+  { naam:"Oogkliniek campus Deurne Noord", gem:"2100 Deurne",
+    lat:51.2205, lng:4.4605, n:5, type:"pr",
+    artsen:["Bevers C.","Depasse M.","Geerts L.","Santos A.",
+            "Vercauteren L."] },
+
+  { naam:"Oogkliniek campus Deurne Zuid", gem:"2100 Deurne",
+    lat:51.203, lng:4.4643, n:7, type:"pr",
+    artsen:["Bleyen I.","Haverals K.","Helsen S.","Moschetta A.",
+            "Prinsen S.","Spiritus A.","Weyns M."] },
+
+  { naam:"Oogkliniek campus Merksem", gem:"2170 Merksem",
+    lat:51.2473, lng:4.451, n:3, type:"pr",
+    artsen:["Babusiaux B.","Goossen C.","Haverals H."] },
+
+  { naam:"Oogkliniek campus Schoten", gem:"2900 Schoten",
+    lat:51.2496, lng:4.4927, n:4, type:"pr",
+    artsen:["Bevers C.","Haverals K.","Helsen S.","Vercauteren L."] },
+
+  { naam:"Oogkliniek campus Wijnegem", gem:"2110 Wijnegem",
+    lat:51.2278, lng:4.5232, n:2, type:"pr",
+    artsen:["Geerts L.","Santos A."] },
+
+  { naam:"Oogkliniek campus Wuustwezel", gem:"2990 Wuustwezel",
+    lat:51.3906, lng:4.5929, n:3, type:"pr",
+    artsen:["Bevers C.","De La Porte V.","Helsen S."] },
+
+  { naam:"Oogkliniek campus Boechout", gem:"2530 Boechout",
+    lat:51.1603, lng:4.4912, n:3, type:"pr",
+    artsen:["Ceuterick S.","Goossen C.","Haverals K."] },
+
+  /* ══════════════════════════════════════════
+     ANTWERPEN STAD
+     ══════════════════════════════════════════ */
+
+  { naam:"ZAS Cadix — Oogartsen aan de Stroom", gem:"2030 Antwerpen",
+    lat:51.2314, lng:4.4153, n:15, type:"zh",
+    artsen:["Al-Saddi M.","Caen S.","Carbonez G.","Cosemans I.",
+            "De Groot V.","Declerck E.","Depla J.","Heremans L.",
+            "Nelis P.","Pierrache L.","Schauwvlieghe P-P.","Sels L.","Van Severen V.",
+            "Veckeneer M.","Zeyen Ph."] },
+
+  { naam:"ZAS Middelheim", gem:"2020 Antwerpen",
+    lat:51.1811, lng:4.4209, n:10, type:"zh",
+    artsen:["Al-Saddi M.","Buys K.","Caen S.","Cosemans I.","De Groot V.",
+            "Declerck E.","Pierrache L.","Van Severen V.","Veckeneer M.","Zeyen Ph."] },
+
+  { naam:"ZAS Palfijn", gem:"2170 Merksem",
+    lat:51.259, lng:4.4516, n:2, type:"zh",
+    artsen:["Mannaerts R.","Nelis P."] },
+
+  { naam:"Goes Oogcentrum", gem:"2050 Antwerpen",
+    lat:51.2283, lng:4.376, n:4, type:"pr",
+    artsen:["Goes F.","Goes S.","Sels L.","Matthys E."] },
+
+  { naam:"Oogteam Antwerpen / Sharper Image (Italiëlei)", gem:"2000 Antwerpen",
+    lat:51.2228, lng:4.4154, n:5, type:"pr",
+    artsen:["Madoe A.","Pinxten A-M.","Reyntjens B.","Simons A-S.","Van der Hauwaert N."] },
+
+  { naam:"Oog & Ooglid Zuid (Jan van Rijswijcklaan)", gem:"2020 Antwerpen",
+    lat:51.1873, lng:4.3941, n:3, type:"pr",
+    artsen:["Dierick H.","Sels L.","Van Mellaert C."] },
+
+  { naam:"Priv. Verdonck (Tolstraat)", gem:"2000 Antwerpen",
+    lat:51.2091, lng:4.4008, n:2, type:"pr",
+    artsen:["Verdonck C.","Verdonck T."] },
+
+  { naam:"Videre et Audire / Priv. Rens", gem:"2000 Antwerpen",
+    lat:51.2078, lng:4.3917, n:2, type:"pr",
+    artsen:["Heremans L.","Rens J."] },
+
+  { naam:"Studio Oculiste / Priv. Verhelst", gem:"2018 Antwerpen",
+    lat:51.1959, lng:4.409, n:1, type:"pr",
+    artsen:["Verhelst D."] },
+
+
+
+  { naam:"Antwerp Eye Care", gem:"2000 Antwerpen",
+    lat:51.2059, lng:4.3833, n:1, type:"pr",
+    artsen:["Claes C."] },
+
+
+  /* BERCHEM */
+  { naam:"Oogkliniek Antwerpen (Grote Steenweg Berchem)", gem:"2600 Berchem",
+    lat:51.1935, lng:4.4212, n:3, type:"pr",
+    artsen:["Berghmans L.","Collaer N.","Van Tenten Y."] },
+
+  /* EKEREN */
+  { naam:"Oog & Ooglid Noord / Priv. Sels (Ekeren)", gem:"2180 Ekeren",
+    lat:51.2809, lng:4.4519, n:3, type:"pr",
+    artsen:["Dierick H.","Sels L.","Van Mellaert C."] },
+
+  /* WILRIJK */
+  { naam:"GZA / ZAS Sint-Augustinus", gem:"2610 Wilrijk",
+    lat:51.1744, lng:4.4181, n:9, type:"zh",
+    artsen:["Aerts L.","Boven K.","Claes C.","Haverbeke G.",
+            "Madoe E.","Vael A.","Van den Heurck J.","Van der Hauwaert N.",
+            "Riems J."] },
+
+  { naam:"Focus / Riems Oogkliniek (Wilrijk)", gem:"2610 Wilrijk",
+    lat:51.1681, lng:4.3924, n:6, type:"pr",
+    artsen:["Callaert J.","De Bruyn B.","Haverbeke G.","Pierrache L.","Riems D.","Riems J."] },
+
+  { naam:"Oogcentrum Medipolis (Wilrijk)", gem:"2610 Wilrijk",
+    lat:51.1727, lng:4.3882, n:5, type:"pr",
+    artsen:["Boeyden V.","De Keyser M.","Mertens E.","Schraepen P.","Vuijk D."] },
+
+  /* EDEGEM */
+  { naam:"UZ Antwerpen (UZA)", gem:"2650 Edegem",
+    lat:51.1567, lng:4.4133, n:22, type:"zh",
+    artsen:["Koppen C. (diensthoofd)","Van Os L.","Verdonck T.","De Vries M.",
+            "Goemaere J.","Van Zeeburg E.","Al-Sabai N.","Al-Saddi M.",
+            "Daniel Y.","D'Haens M.","De La Porte V.","Janssen C.","Jongenelen S.",
+            "Kiekens S.","Leysen I.","Mooren P.",
+            "Vael A.","Van de Mosselaer S.","Van Severen V.","Verhulst S.",
+            "Wellens L.","+ ASO's in opleiding"] },
+
+  { naam:"New Vision Oogkliniek (Edegem)", gem:"2650 Edegem",
+    lat:51.1522, lng:4.435, n:9, type:"pr",
+    artsen:["Buyck A.","Buys K.","Devloo S.","Hondeghem K.","Ruys J.",
+            "Schauwvlieghe P-P.","Van de Velde T.","Van Mellaert C.",
+            "Vermeulen L.","Dierick H. (visitant)"] },
+
+  { naam:"Praktijk Meihof (Edegem)", gem:"2650 Edegem",
+    lat:51.1558, lng:4.4525, n:4, type:"pr",
+    artsen:["Kiekens S.","Schneider S.","Van Looveren J.","Weyns M."] },
+
+  /* MORTSEL */
+
+  /* SCHOTEN (privé, NIET oogkliniek-campus) */
+  { naam:"Dr. Zeyen–Cosemans–Caen (Schoten privé)", gem:"2900 Schoten",
+    lat:51.2523, lng:4.5176, n:3, type:"pr",
+    artsen:["Caen S.","Cosemans I.","Zeyen Ph."] },
+
+  /* BRASSCHAAT */
+  { naam:"AZ Klina (Brasschaat)", gem:"2930 Brasschaat",
+    lat:51.2981, lng:4.4902, n:7, type:"zh",
+    artsen:["Bartholomeeusen E.","Haustermans A.","Leysen I.","Mooren P.",
+            "Van Looveren J.","Van Oevelen K.","Verhelst D."] },
+
+  { naam:"Oogkliniek Brasschaat ECC (Signifeye)", gem:"2930 Brasschaat",
+    lat:51.3038, lng:4.5033, n:5, type:"pr",
+    artsen:["Dam J.","De Brauwer A-K.","Haustermans A.","Janssens K.","Leys M."],
+    bron:"oogkliniekbrasschaat.be (team 5 oogartsen bevestigd)" },
+
+  { naam:"Oogcentrum Brasschaat", gem:"2930 Brasschaat",
+    lat:51.304, lng:4.4854, n:4, type:"pr",
+    artsen:["Kloeck D.","Mooren P.","Van Looveren J.","Van Oevelen K."] },
+
+  /* NOORD */
+  { naam:"Oogartsen Stabroek", gem:"2940 Stabroek",
+    lat:51.3356, lng:4.3779, n:2, type:"pr",
+    artsen:["Jongenelen S.","Verhulst S."] },
+
+  { naam:"Priv. Kapellen (Janssens)", gem:"2950 Kapellen",
+    lat:51.3148, lng:4.4303, n:2, type:"pr",
+    artsen:["Haagdorens M.","Janssens K."] },
+
+  { naam:"Oogcentrum Kalmthout", gem:"2920 Kalmthout",
+    lat:51.3829, lng:4.4746, n:1, type:"pr",
+    artsen:["Despriet D."] },
+
+  { naam:"Visionair Oogzorg Brecht", gem:"2960 Brecht",
+    lat:51.3491, lng:4.6761, n:2, type:"pr",
+    artsen:["Faizi N.","Abbeel L."] },
+
+  /* MALLE / VOORKEMPEN */
+  { naam:"AZ Voorkempen / Sint-Jozef (Malle)", gem:"2390 Malle",
+    lat:51.2751, lng:4.6449, n:6, type:"zh",
+    artsen:["Brouwers K.","De Keyzer K.","Despriet D.","Faizi N.","Goemaere J.",
+            "Stroobants A."] },
+
+  /* SCHILDE / OOSTRAND */
+  { naam:"Oogcentrum Schilde (ORCS)", gem:"2970 Schilde",
+    lat:51.2727, lng:4.6199, n:7, type:"pr",
+    artsen:["Van den Bergh L.","Clemens A.","Van Nuffel S.","De Vin T.",
+            "Vissenberg I.","Pinxten A-M.","Declerck E."] },
+
+  { naam:"Priv. Carbonez ('s-Gravenwezel)", gem:"2970 Schilde",
+    lat:51.2534, lng:4.5463, n:1, type:"pr",
+    artsen:["Carbonez G."] },
+
+  /* EMBLEM / NIJLEN / GROBBENDONK */
+  { naam:"Priv. Emblem (D'Haens)", gem:"2520 Emblem",
+    lat:51.1555, lng:4.5818, n:1, type:"pr",
+    artsen:["D'Haens M."] },
+
+  { naam:"Priv. Nijlen (Sensco / Medicare)", gem:"2560 Nijlen",
+    lat:51.1641, lng:4.7029, n:2, type:"pr",
+    artsen:["Faizi A.","Willekens E."] },
+
+  { naam:"Dr. Witters (Grobbendonk)", gem:"2280 Grobbendonk",
+    lat:51.1761, lng:4.781, n:1, type:"pr",
+    artsen:["Witters E."] },
+
+  /* LIER / ZUIDOOST */
+  { naam:"Oogartsen Lier / Signifeye", gem:"2500 Lier",
+    lat:51.126, lng:4.572, n:8, type:"pr",
+    artsen:["Batailde G.","De Man V.","Dieltiëns M.","Leysen L.","Magnus J.",
+            "Splavski B.","Therssen R.","Witters E."] },
+
+  { naam:"AZ Heilig Hart Lier", gem:"2500 Lier",
+    lat:51.1328, lng:4.5644, n:5, type:"zh",
+    artsen:["Batailde G.","Dieltiëns M.","Magnus J.","Peeters R.","Theuwis K."] },
+
+  { naam:"Priv. Duffel (Van de Mosselaer)", gem:"2570 Duffel",
+    lat:51.0937, lng:4.5015, n:1, type:"pr",
+    artsen:["Van de Mosselaer G."] },
+
+  { naam:"Priv. Berlaar (Vervecken)", gem:"2590 Berlaar",
+    lat:51.1183, lng:4.6587, n:1, type:"pr",
+    artsen:["Vervecken F."] },
+
+  { naam:"Oogartsen Putte (Caluwaerts / Verschooten / Van Mierlo)", gem:"2580 Putte",
+    lat:51.0558, lng:4.6309, n:3, type:"pr",
+    artsen:["Caluwaerts E.","Van Mierlo C.","Verschooten R."] },
+
+  /* ZUIDRAND */
+  { naam:"Priv. Kontich (Vermeulen / Haverbeke)", gem:"2550 Kontich",
+    lat:51.1363, lng:4.4469, n:2, type:"pr",
+    artsen:["Vermeulen L.","Vermeulen P."] },
+
+  { naam:"Ocumedi / Vandeweyer–Veryser (Lint)", gem:"2547 Lint",
+    lat:51.1286, lng:4.4974, n:2, type:"pr",
+    artsen:["Vandeweyer E.","Veryser E."] },
+
+  { naam:"Priv. Aartselaar (Van der Donck)", gem:"2630 Aartselaar",
+    lat:51.1296, lng:4.39, n:1, type:"pr",
+    artsen:["Van der Donck I."] },
+
+  { naam:"Oogcentrum Visie (Sint-Katelijne-Waver)", gem:"2860 Sint-Katelijne-Waver",
+    lat:51.0727, lng:4.5338, n:2, type:"pr",
+    artsen:["Ceuppens S.","Termote K."] },
+
+  /* RUMST / BOOM / WILLEBROEK / PUURS */
+  { naam:"AZ Rivierenland (Rumst)", gem:"2840 Rumst",
+    lat:51.1061, lng:4.3718, n:9, type:"zh",
+    artsen:["Augustinus C.","Breusegem C.","Haverbeke G.","Reyntjens I.",
+            "Van den Ende P.","Van der Donck I.",
+            "Verbruggen K.","Vermeulen L.","Vermeulen P."] },
+
+  { naam:"Imelda Ziekenhuis (Bonheiden)", gem:"2820 Bonheiden",
+    lat:51.0169, lng:4.5591, n:8, type:"zh",
+    artsen:["Augustinus C.","Caluwaerts E.","Ceuppens S.","Prud'homme S.",
+            "Rossou E.","Termote K.","Van Mierlo C.","Verschooten R."] },
+
+  { naam:"Oogartsen Blaasveld", gem:"2830 Willebroek",
+    lat:51.0524, lng:4.3804, n:4, type:"pr",
+    artsen:["Bal T.","Coremans B.","Nowé G.","Robben P."] },
+
+  { naam:"Priv. Boom (Verbruggen)", gem:"2850 Boom",
+    lat:51.089, lng:4.365, n:1, type:"pr",
+    artsen:["Verbruggen K."] },
+
+  { naam:"Oogartsen Puurs-Sint-Amands", gem:"2870 Puurs",
+    lat:51.0759, lng:4.2855, n:3, type:"pr",
+    artsen:["Augustinus A.","Augustinus C.","Devloo S."] },
+
+  /* MECHELEN */
+  { naam:"AZ Sint-Maarten (Mechelen)", gem:"2800 Mechelen",
+    lat:51.0488, lng:4.4793, n:9, type:"zh",
+    artsen:["Bal T.","Coremans B.","De Smedt S.","Devos M.","Maeyens E.",
+            "Robben P.","Van Schelvergem K.","Vandeweyer E.","Veryser E."] },
+
+  { naam:"Dr. Frankefort (Mechelen)", gem:"2800 Mechelen",
+    lat:51.0234, lng:4.4796, n:1, type:"pr",
+    artsen:["Frankefort N."] },
+
+  /* OOST-VLAANDEREN */
+  { naam:"VITAZ (Sint-Niklaas / Lokeren / Beveren)", gem:"9100 Sint-Niklaas",
+    lat:51.1619, lng:4.1495, n:17, type:"zh",
+    artsen:["Boven G.","Boven K.","Cardoen L.","Claes K.","De Man V.",
+            "De Sutter C.","De Vin T.","De Wilde G.","Goegebuer A.","Goes F.",
+            "Huyghe Ph.","Jacobs S.","Janssens B.","Ruys J.","Van den Heurck J.",
+            "Vandeputte J.","Vermorgen K."] },
+
+  { naam:"Oogcentrum Waasland (Melsele)", gem:"9120 Melsele",
+    lat:51.2201, lng:4.2951, n:4, type:"pr",
+    artsen:["Vael A.","Van den Heurck J.","Boven K.","Boven G."] },
+
+  { naam:"Priv. Temse (Demeulemeester)", gem:"9140 Temse",
+    lat:51.1247, lng:4.2121, n:1, type:"pr",
+    artsen:["Demeulemeester C."] },
+
+  { naam:"Priv. Vermorgen (Waasmunster)", gem:"9250 Waasmunster",
+    lat:51.1192, lng:4.0895, n:1, type:"pr",
+    artsen:["Vermorgen K."] },
+
+  { naam:"Oogartsen Nijlen (Gemeentestraat)", gem:"2560 Nijlen",
+    lat:51.1613, lng:4.6716, n:2, type:"pr",
+    artsen:["Muylaert L.","Ruiters S."] },
+
+  /* ══════════════════════════════════════════
+     EXTRA ZIEKENHUIZEN / CAMPUSSEN
+     ══════════════════════════════════════════ */
+
+  { naam:"ZAS Hoge Beuken", gem:"2660 Hoboken",
+    lat:51.184, lng:4.3532, n:1, type:"zh",
+    artsen:["Al-Saddi M."] },
+
+  { naam:"ZAS Paola", gem:"2020 Antwerpen",
+    lat:51.1813, lng:4.4211, n:2, type:"zh",
+    artsen:["Buys K.","Pierrache L."] },
+
+
+  { naam:"ZAS Vincentius", gem:"2018 Antwerpen",
+    lat:51.2059, lng:4.4134, n:3, type:"zh",
+    artsen:["Dierick H.","Pinxten A-M.","Simons A-S."] },
+
+  { naam:"AZ Rivierenland – Bornem", gem:"2880 Bornem",
+    lat:51.1001, lng:4.232, n:3, type:"zh",
+    artsen:["Van Looveren I.","Van Poucke K.","Verhamme T."] },
+
+  /* ══════════════════════════════════════════
+     EXTRA PRIVÉPRAKTIJKEN
+     ══════════════════════════════════════════ */
+
+  { naam:"Oogarts Hove (Wynants)", gem:"2540 Hove",
+    lat:51.1484, lng:4.4776, n:1, type:"pr",
+    artsen:["Wynants S."] },
+
+];
+
+// ═══════════════════════════════════════════════════════════
+// MAP SETUP
+// ═══════════════════════════════════════════════════════════
+const map = L.map('map', {
+  center: [51.20, 4.43],
+  zoom: 11,
+  zoomControl: false,
+});
+
+L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+// Dark map tiles
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> © <a href="https://carto.com/">CARTO</a>',
+  subdomains: 'abcd', maxZoom: 19
+}).addTo(map);
+
+// Labels only overlay (roads / city names)
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
+  subdomains: 'abcd', maxZoom: 19, opacity: 0.7
+}).addTo(map);
+
+// 25 km radius circle
+L.circle([51.2226, 4.4687], {
+  radius: 25000,
+  color: '#f0833a',
+  weight: 1.5,
+  opacity: 0.3,
+  fillColor: '#f0833a',
+  fillOpacity: 0.04,
+  dashArray: '7 7',
+}).addTo(map);
+
+// ═══════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════
+function color(n) {
+  if (n >= 20) return '#f0833a';
+  if (n >= 12) return '#e05a52';
+  if (n >= 6)  return '#38bdf8';
+  if (n >= 3)  return '#60a5d8';
+  return '#7890a8';
+}
+
+function radius(n) {
+  if (n >= 25) return 34;
+  if (n >= 20) return 29;
+  if (n >= 12) return 23;
+  if (n >= 8)  return 19;
+  if (n >= 6)  return 15;
+  if (n >= 3)  return 12;
+  if (n >= 2)  return 9;
+  return 7;
+}
+
+function borderCol(type) {
+  return type === 'zh' ? '#f0833a' : '#38bdf8';
+}
+
+// ═══════════════════════════════════════════════════════════
+// MARKERS
+// ═══════════════════════════════════════════════════════════
+let markers = [];
+
+LOCS.forEach(loc => {
+  // Center marker handled separately
+  if (loc.center) {
+    const ci = L.divIcon({
+      className: '',
+      html: `<div class="cmarker">★</div>`,
+      iconSize: [36, 36], iconAnchor: [18, 18], popupAnchor: [0, -22]
+    });
+    L.marker([loc.lat, loc.lng], { icon: ci, zIndexOffset: 3000 })
+      .bindPopup(buildPopup(loc), { maxWidth: 380, minWidth: 280 })
+      .addTo(map);
+    return;
+  }
+
+  const AZ_MONICA_CAMPUSSEN = [
+    "Oogkliniek campus Deurne Noord",
+    "Oogkliniek campus Deurne Zuid",
+    "Oogkliniek campus Merksem",
+    "Oogkliniek campus Schoten",
+    "Oogkliniek campus Wijnegem",
+    "Oogkliniek campus Wuustwezel",
+    "Oogkliniek campus Boechout",
+    "Oogarts Hove (Wynants)",
+    "Oogkliniek Antwerpen (Grote Steenweg Berchem)"
+  ];
+  const isMonicaCampus = AZ_MONICA_CAMPUSSEN.includes(loc.naam);
+
+  const r = 14; // vaste grootte voor alle bollen
+  const c = isMonicaCampus ? '#f0833a' : '#38bdf8';
+  const bc = isMonicaCampus ? '#ff6600' : '#1a8fd1';
+  const glowColor = isMonicaCampus ? '240,131,58' : '56,189,248';
+
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="
+      width:${r*2}px;height:${r*2}px;
+      background:${c};
+      border:2px solid ${bc};
+      border-radius:50%;
+      box-shadow:0 0 ${r*0.8}px rgba(${glowColor},0.5),0 2px 10px rgba(0,0,0,0.55);
+      display:flex;align-items:center;justify-content:center;
+      font-family:'Syne',sans-serif;
+      font-size:13px;
+      font-weight:700;
+      color:rgba(255,255,255,${isMonicaCampus ? 0.95 : 0});
+      cursor:pointer;
+      transition:transform 0.15s ease,box-shadow 0.15s ease;
+    " class="mb">${isMonicaCampus ? '★' : ''}</div>`,
+    iconSize: [r*2, r*2],
+    iconAnchor: [r, r],
+    popupAnchor: [0, -(r + 6)]
+  });
+
+  const m = L.marker([loc.lat, loc.lng], { icon })
+    .bindPopup(buildPopup(loc), { maxWidth: 380, minWidth: 270 })
+    .addTo(map);
+
+  m.on('mouseover', function() {
+    const el = this.getElement()?.querySelector('.mb');
+    if (el) {
+      el.style.transform = 'scale(1.35)';
+      el.style.boxShadow = `0 0 ${r*1.4}px rgba(${glowColor},0.7),0 4px 16px rgba(0,0,0,0.6)`;
+    }
+  });
+  m.on('mouseout', function() {
+    const el = this.getElement()?.querySelector('.mb');
+    if (el) {
+      el.style.transform = 'scale(1)';
+      el.style.boxShadow = `0 0 ${r*0.8}px rgba(${glowColor},0.4),0 2px 10px rgba(0,0,0,0.55)`;
+    }
+  });
+
+  m._loc = loc;
+  markers.push(m);
+});
+
+function buildPopup(loc) {
+  const typeLabel = loc.type === 'zh' || loc.center
+    ? '🏥 Ziekenhuis / kliniek'
+    : '🔬 Privépraktijk';
+  const names = loc.artsen.map(a => `<span>${a}</span>`).join('');
+  return `
+    <div class="pu-head">
+      <div class="pu-type">${typeLabel}</div>
+      <div class="pu-naam">${loc.naam}</div>
+      <div class="pu-gem">${loc.gem}</div>
+      <div class="pu-badge">👁 ${loc.n} oogarts${loc.n !== 1 ? 'en' : ''}${loc.center ? ' · Centrum 25 km straal' : ''}</div>
+    </div>
+    <div class="pu-body">
+      <div class="pu-names">${names}</div>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════
+// FIT BOUNDS
+// ═══════════════════════════════════════════════════════════
+const bounds = L.latLngBounds(LOCS.map(l => [l.lat, l.lng]));
+map.fitBounds(bounds.pad(0.06));
+
+// ═══════════════════════════════════════════════════════════
+// FILTER
+// ═══════════════════════════════════════════════════════════
+function setFilter(f) {
+  document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'));
+  const ids = { all:'f-all', zh:'f-zh', pr:'f-pr', big:'f-big' };
+  document.getElementById(ids[f])?.classList.add('active');
+
+  markers.forEach(m => {
+    const d = m._loc;
+    const show =
+      f === 'all' ? true :
+      f === 'zh'  ? d.type === 'zh' :
+      f === 'pr'  ? d.type === 'pr' :
+      /* big */     d.n >= 8;
+
+    if (show && !map.hasLayer(m)) map.addLayer(m);
+    if (!show && map.hasLayer(m)) map.removeLayer(m);
+  });
+}
+</script>
+</body>
+</html>
